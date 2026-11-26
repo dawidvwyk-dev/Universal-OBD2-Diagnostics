@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:obd_transport/obd_transport.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum UnitSystem { metric, imperial }
@@ -10,6 +11,8 @@ class AppSettings {
     this.refreshMs = 500,
     this.wifiHost = '192.168.0.10',
     this.wifiPort = 35000,
+    this.lastAdapter,
+    this.autoConnect = true,
   });
 
   final UnitSystem units;
@@ -22,8 +25,24 @@ class AppSettings {
   final String wifiHost;
   final int wifiPort;
 
-  AppSettings copyWith({UnitSystem? units, bool? developerMode, int? refreshMs, String? wifiHost, int? wifiPort}) =>
+  /// The last adapter that connected successfully (never the simulator).
+  final TransportEndpoint? lastAdapter;
+
+  /// Connect to [lastAdapter] when the app starts.
+  final bool autoConnect;
+
+  AppSettings copyWith(
+          {UnitSystem? units,
+          bool? developerMode,
+          int? refreshMs,
+          String? wifiHost,
+          int? wifiPort,
+          TransportEndpoint? lastAdapter,
+          bool clearLastAdapter = false,
+          bool? autoConnect}) =>
       AppSettings(
+        lastAdapter: clearLastAdapter ? null : (lastAdapter ?? this.lastAdapter),
+        autoConnect: autoConnect ?? this.autoConnect,
         units: units ?? this.units,
         developerMode: developerMode ?? this.developerMode,
         refreshMs: refreshMs ?? this.refreshMs,
@@ -45,6 +64,8 @@ class SettingsNotifier extends Notifier<AppSettings> {
       refreshMs: p.getInt('refreshMs') ?? 500,
       wifiHost: p.getString('wifiHost') ?? '192.168.0.10',
       wifiPort: p.getInt('wifiPort') ?? 35000,
+      lastAdapter: _decodeEndpoint(p.getStringList('lastAdapter')),
+      autoConnect: p.getBool('autoConnect') ?? true,
     );
   }
 
@@ -57,7 +78,21 @@ class SettingsNotifier extends Notifier<AppSettings> {
     p.setInt('refreshMs', s.refreshMs);
     p.setString('wifiHost', s.wifiHost);
     p.setInt('wifiPort', s.wifiPort);
+    p.setBool('autoConnect', s.autoConnect);
+    final a = s.lastAdapter;
+    if (a == null) {
+      p.remove('lastAdapter');
+    } else {
+      p.setStringList('lastAdapter', [a.kind.name, a.address, a.name, '${a.port ?? ''}', '${a.baudRate ?? ''}']);
+    }
   }
+}
+
+TransportEndpoint? _decodeEndpoint(List<String>? v) {
+  if (v == null || v.length != 5) return null;
+  final kind = TransportKind.values.where((k) => k.name == v[0]).firstOrNull;
+  if (kind == null || kind == TransportKind.simulator) return null;
+  return TransportEndpoint(kind: kind, address: v[1], name: v[2], port: int.tryParse(v[3]), baudRate: int.tryParse(v[4]));
 }
 
 final settingsProvider = NotifierProvider<SettingsNotifier, AppSettings>(SettingsNotifier.new);

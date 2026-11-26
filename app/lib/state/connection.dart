@@ -6,6 +6,9 @@ import 'package:obd_protocols/obd_protocols.dart';
 import 'package:obd_sim/obd_sim.dart';
 import 'package:obd_transport/obd_transport.dart';
 
+import '../transport/discovery.dart';
+import 'settings.dart';
+
 /// Everything the UI knows about the current adapter and vehicle link.
 class ConnectionInfo {
   const ConnectionInfo({
@@ -18,6 +21,7 @@ class ConnectionInfo {
     this.error,
     this.simulated = false,
     this.busy = false,
+    this.note,
   });
 
   final ObdSession? session;
@@ -33,6 +37,9 @@ class ConnectionInfo {
   final bool simulated;
   final bool busy;
 
+  /// Progress text while connecting, such as the baud rate being tried.
+  final String? note;
+
   bool get isReady => session != null && state == SessionState.ready;
 
   ConnectionInfo copyWith({
@@ -46,6 +53,8 @@ class ConnectionInfo {
     bool clearError = false,
     bool? simulated,
     bool? busy,
+    String? note,
+    bool clearNote = false,
   }) =>
       ConnectionInfo(
         session: session ?? this.session,
@@ -57,6 +66,7 @@ class ConnectionInfo {
         error: clearError ? null : (error ?? this.error),
         simulated: simulated ?? this.simulated,
         busy: busy ?? this.busy,
+        note: clearNote ? null : (note ?? this.note),
       );
 }
 
@@ -74,12 +84,53 @@ class ConnectionController extends Notifier<ConnectionInfo> {
     return const ConnectionInfo();
   }
 
-  Future<void> connectWifi(String host, int port, {ObdProtocol protocol = ObdProtocol.auto}) =>
-      _connect(
-        TcpTransport(TransportEndpoint(kind: TransportKind.wifi, address: host, port: port, name: 'Wi-Fi adapter')),
-        protocol: protocol,
-        simulated: false,
-      );
+  Future<void> connectWifi(String host, int port, {ObdProtocol protocol = ObdProtocol.auto}) => connectEndpoint(
+      TransportEndpoint(kind: TransportKind.wifi, address: host, port: port, name: 'Wi-Fi adapter'),
+      protocol: protocol);
+
+  /// Connects to a real adapter. Serial endpoints without a baud rate get one
+  /// detected first. On success the endpoint is remembered for next time.
+  Future<void> connectEndpoint(TransportEndpoint endpoint, {ObdProtocol protocol = ObdProtocol.auto}) async {
+    final discovery = ref.read(adapterDiscoveryProvider);
+    var ep = endpoint;
+    if (ep.kind == TransportKind.usbSerial && ep.baudRate == null) {
+      await disconnect();
+      state = ConnectionInfo(state: SessionState.connectingAdapter, endpoint: ep, busy: true, note: 'Detecting baud rate...');
+      final (baud, attempts) = await detectBaudRate(
+          baudOrderFor(product: ep.name), (b) => discovery.transportFor(_withBaud(ep, b)));
+      if (baud == null) {
+        state = ConnectionInfo(
+          state: SessionState.failed,
+          endpoint: ep,
+          error: 'No OBD adapter answered on ${ep.address}. Tried ${attempts.map((a) => '${a.baud} (${a.detail})').join(', ')}.',
+        );
+        return;
+      }
+      ep = _withBaud(ep, baud);
+    }
+    await _connect(discovery.transportFor(ep), protocol: protocol, simulated: false);
+    if (state.isReady) {
+      final settings = ref.read(settingsProvider.notifier);
+      settings.update(ref.read(settingsProvider).copyWith(lastAdapter: ep));
+    }
+  }
+
+  /// Connects to the last adapter that worked, if any.
+  Future<void> connectLast() async {
+    final last = ref.read(settingsProvider).lastAdapter;
+    if (last == null || state.session != null || state.busy) return;
+    if (last.kind != TransportKind.wifi) {
+      final err = await ref.read(adapterDiscoveryProvider).prepare(last.kind);
+      if (err != null) {
+        state = state.copyWith(error: err);
+        return;
+      }
+    }
+    await connectEndpoint(last);
+  }
+
+  static TransportEndpoint _withBaud(TransportEndpoint e, int baud) =>
+      TransportEndpoint(kind: e.kind, address: e.address, name: e.name, port: e.port, baudRate: baud, signalStrength: e.signalStrength);
 
   Future<void> connectSimulator(String scenario, SimAdapterProfile profile) {
     final factory = Scenarios.all[scenario] ?? Scenarios.healthyCan;
@@ -105,12 +156,16 @@ class ConnectionController extends Notifier<ConnectionInfo> {
       state = state.copyWith(adapter: session.adapter, clearError: true);
       final quality = await measureLinkQuality(session.link, count: 5);
       final identity = await session.readIdentity();
-      state = state.copyWith(quality: quality, identity: identity, busy: false);
+      state = state.copyWith(quality: quality, identity: identity, busy: false, clearNote: true);
       _transportSub = transport.stateChanges.listen((t) {
         if (t == TransportState.failed && !_userClosed) unawaited(_recover());
       });
     } catch (e) {
-      state = state.copyWith(state: SessionState.failed, error: _describe(e), busy: false, adapter: session.adapter);
+      try {
+        await session.close();
+      } catch (_) {}
+      state = state.copyWith(
+          state: SessionState.failed, error: _describe(e), busy: false, adapter: session.adapter, clearNote: true);
     }
   }
 
@@ -149,7 +204,8 @@ class ConnectionController extends Notifier<ConnectionInfo> {
 
   static String _describe(Object e) => switch (e) {
         ObdException(:final message) => message,
-        TransportException(:final message) => message,
+        TransportException(:final message, :final cause) =>
+          cause == null ? message : '$message: ${cause.toString().replaceFirst(RegExp(r'^(Bad state|Exception|PlatformException\([^,]*,)\s*:?\s*'), '')}',
         ElmTimeoutException() => 'The adapter stopped answering. Check it is powered and in range.',
         LinkClosedException() => 'The connection to the adapter closed.',
         _ => e.toString(),

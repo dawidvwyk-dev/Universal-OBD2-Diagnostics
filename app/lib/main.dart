@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'router.dart';
+import 'state/connection.dart';
 import 'state/settings.dart';
 import 'theme/app_theme.dart';
 
@@ -20,14 +21,24 @@ Future<void> main() async {
   ));
 }
 
-class DiagnosticsApp extends StatefulWidget {
+class DiagnosticsApp extends ConsumerStatefulWidget {
   const DiagnosticsApp({super.key});
   @override
-  State<DiagnosticsApp> createState() => _DiagnosticsAppState();
+  ConsumerState<DiagnosticsApp> createState() => _DiagnosticsAppState();
 }
 
-class _DiagnosticsAppState extends State<DiagnosticsApp> {
+class _DiagnosticsAppState extends ConsumerState<DiagnosticsApp> {
   final _router = buildRouter();
+
+  @override
+  void initState() {
+    super.initState();
+    // Reconnect to the last adapter that worked, when the user allows it.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final s = ref.read(settingsProvider);
+      if (s.autoConnect && s.lastAdapter != null) ref.read(connectionProvider.notifier).connectLast();
+    });
+  }
 
   @override
   Widget build(BuildContext context) => MaterialApp.router(

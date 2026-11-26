@@ -2,6 +2,9 @@
 /// simulator. Platform-specific implementations live in the app's plugins.
 library;
 
+export 'src/ble_profiles.dart';
+export 'src/link_transport.dart';
 export 'src/memory_transport.dart';
+export 'src/serial_ids.dart';
 export 'src/tcp_transport.dart';
 export 'src/transport.dart';

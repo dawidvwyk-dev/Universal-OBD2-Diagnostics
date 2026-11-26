@@ -9,6 +9,7 @@ import '../state/connection.dart';
 import '../state/settings.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import 'adapter_finder.dart';
 
 class ConnectScreen extends ConsumerStatefulWidget {
   const ConnectScreen({super.key});
@@ -93,12 +94,8 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
             ]),
           ]),
         ),
-        const InfoCard(
-          title: 'Bluetooth Classic, Bluetooth LE and USB',
-          icon: Icons.bluetooth,
-          child: Text('Adapter search and connection over Bluetooth Classic, Bluetooth LE and USB serial are being built in Phase 2 '
-              'and are not available in this build.', style: TextStyle(color: AppColors.textSecondary)),
-        ),
+        const LastAdapterCard(),
+        const AdapterFinderCard(),
         if (dev)
           InfoCard(
             title: 'Test simulator (developer mode)',
@@ -155,6 +152,8 @@ class _StatusCard extends ConsumerWidget {
           : null,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         if (c.busy) const Padding(padding: EdgeInsets.only(bottom: 12), child: LinearProgressIndicator()),
+        if (c.note != null)
+          Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(c.note!, style: const TextStyle(color: AppColors.textSecondary))),
         if (c.error != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
@@ -171,6 +170,7 @@ class _StatusCard extends ConsumerWidget {
             SessionState.failed => 'Failed',
           }),
           if (c.endpoint != null) ('Connection', c.endpoint.toString()),
+          if (c.endpoint?.baudRate != null) ('Baud rate', '${c.endpoint!.baudRate}'),
           if (a != null) ('Adapter', '${a.manufacturer}, ${a.model}'),
           if (c.isReady) ('Protocol', c.session!.protocol.label),
           if (c.isReady) ('Control modules', c.session!.ecus.join(', ')),
