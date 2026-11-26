@@ -1,4 +1,4 @@
-package com.obddiag.obd_diag_app
+package com.rogue.obd2diagnostic
 
 import io.flutter.embedding.android.FlutterActivity
 

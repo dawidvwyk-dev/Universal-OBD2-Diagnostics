@@ -1,4 +1,3 @@
-import 'package:diag_store/diag_store.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
@@ -10,6 +9,7 @@ import '../state/scan.dart';
 import '../state/settings.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/dtc_details.dart';
 import '../widgets/value_format.dart';
 
 class ScanScreen extends ConsumerWidget {
@@ -163,11 +163,6 @@ class DtcListCard extends StatelessWidget {
   }
 }
 
-final _definitionProvider = FutureProvider.family<DtcDefinition?, (String, String?)>((ref, arg) async {
-  final repo = await ref.watch(repositoryProvider.future);
-  return repo.lookupDtc(arg.$1, manufacturer: arg.$2);
-});
-
 class DtcTile extends ConsumerWidget {
   const DtcTile(this.dtc, this.status, {super.key});
   final Dtc dtc;
@@ -176,7 +171,7 @@ class DtcTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final make = ref.watch(connectionProvider).identity?.manufacturer;
-    final def = ref.watch(_definitionProvider((dtc.code, make))).value;
+    final def = ref.watch(dtcDefinitionProvider((dtc.code, make))).value;
     final system = switch (dtc.system) {
       DtcSystem.powertrain => 'Powertrain',
       DtcSystem.chassis => 'Chassis',
@@ -186,6 +181,8 @@ class DtcTile extends ConsumerWidget {
     final origin = dtc.origin == DtcOrigin.generic ? 'Generic (SAE) code number' : 'Manufacturer-specific code number';
     return ListTile(
       contentPadding: EdgeInsets.zero,
+      onTap: def == null ? null : () => showDtcDetails(context, def),
+      trailing: def == null ? null : SeverityPill(def.severity),
       leading: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(

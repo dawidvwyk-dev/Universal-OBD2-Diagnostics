@@ -1,5 +1,5 @@
 name: obd_diag_app
-description: "Professional OBD2 diagnostic application for Windows and Android."
+description: "Rogue OBD2 Diagnostic Tool for Windows and Android."
 publish_to: 'none'
 resolution: workspace
 version: 0.1.0+1
@@ -31,3 +31,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/dtc/rogue_generic.json

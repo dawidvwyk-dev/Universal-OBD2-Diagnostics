@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:obd_decoders/obd_decoders.dart';
 
 import 'database.dart';
+import 'pack_format.dart';
 
 /// A scan as stored and loaded. Built from decoder types so this package
 /// does not depend on the communication engine.
@@ -308,6 +309,23 @@ class DiagRepository {
   /// Looks up [code]. A manufacturer-specific definition for [manufacturer]
   /// wins over a generic one. Returns null when no installed pack defines
   /// the code; callers must then show the code as unknown.
+  /// Version of an installed pack, or null when it is not installed.
+  Future<String?> packVersion(String id) async =>
+      (await (db.select(db.dtcPacks)..where((t) => t.id.equals(id))).getSingleOrNull())?.version;
+
+  /// Installs [file] unless the same pack version is already installed.
+  /// Returns true when it was (re)installed.
+  Future<bool> ensurePack(DtcPackFile file) async {
+    if (await packVersion(file.pack.id) == file.pack.version) return false;
+    await installPack(file.pack, file.definitions);
+    return true;
+  }
+
+  Future<int> definitionCount() async {
+    final c = db.dtcDefinitions.code.count();
+    return (await (db.selectOnly(db.dtcDefinitions)..addColumns([c])).getSingle()).read(c) ?? 0;
+  }
+
   Future<DtcDefinition?> lookupDtc(String code, {String? manufacturer}) async {
     final rows = await (db.select(db.dtcDefinitions)..where((t) => t.code.equals(code.toUpperCase()))).get();
     if (rows.isEmpty) return null;

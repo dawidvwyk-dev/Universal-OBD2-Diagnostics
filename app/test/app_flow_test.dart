@@ -100,6 +100,12 @@ void main() {
     await _settle(t, 8000);
     expect(find.text('P0171'), findsWidgets);
     expect(find.text('Check engine light ON'), findsOneWidget);
+    // The built-in description pack loads from the app's assets.
+    await t.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 500)),
+    );
+    await _settle(t, 200);
+    expect(find.textContaining('Fuel mixture too lean (bank 1)'), findsWidgets);
     await _shot(t, 'desktop_full_scan');
     await t.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 200)),
@@ -154,6 +160,37 @@ void main() {
     await _shot(t, 'desktop_clear_confirm');
     await t.tap(find.text('Cancel'));
     await _settle(t, 200);
+
+    // Code library search and detail view.
+    await t.scrollUntilVisible(
+      find.byKey(const Key('dtc-search')),
+      400,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView).first,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await t.enterText(find.byKey(const Key('dtc-search')), 'P0302');
+    await t.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 300)),
+    );
+    await _settle(t, 200);
+    expect(find.text('Misfire detected in cylinder 2'), findsOneWidget);
+    await t.tap(find.text('Misfire detected in cylinder 2'));
+    await _settle(t, 300);
+    expect(find.text('Possible causes (most common first)'), findsOneWidget);
+    expect(find.textContaining('Generic interpretation'), findsOneWidget);
+    await _shot(t, 'desktop_code_details');
+    await t.tap(find.text('Close'));
+    await _settle(t, 200);
+    await t.enterText(find.byKey(const Key('dtc-search')), 'P1234');
+    await t.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 300)),
+    );
+    await _settle(t, 200);
+    expect(find.textContaining('P1234 is not in the library'), findsOneWidget);
     // Dispose the app so database stream timers are cancelled.
     await t.pumpWidget(const SizedBox());
     await t.pump(const Duration(seconds: 1));

@@ -31,7 +31,7 @@ class _DiagnosticsAppState extends State<DiagnosticsApp> {
 
   @override
   Widget build(BuildContext context) => MaterialApp.router(
-        title: 'OBD2 Diagnostics',
+        title: 'Rogue OBD2 Diagnostic Tool',
         debugShowCheckedModeBanner: false,
         theme: buildTheme(),
         darkTheme: buildTheme(),

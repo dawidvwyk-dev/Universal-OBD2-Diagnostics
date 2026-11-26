@@ -90,7 +90,10 @@ class _Brand extends StatelessWidget {
         child: Row(children: [
           Icon(Icons.car_repair, color: AppColors.accent),
           SizedBox(width: 10),
-          Text('OBD2 Diagnostics', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+          SizedBox(
+            width: 150,
+            child: Text('Rogue OBD2 Diagnostic Tool', maxLines: 2, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+          ),
         ]),
       );
 }

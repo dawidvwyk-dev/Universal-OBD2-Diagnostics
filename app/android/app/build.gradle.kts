@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.obddiag.obd_diag_app"
+    namespace = "com.rogue.obd2diagnostic"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -16,7 +16,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.obddiag.obd_diag_app"
+        applicationId = "com.rogue.obd2diagnostic"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

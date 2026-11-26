@@ -6,8 +6,10 @@ import 'package:obd_engine/obd_engine.dart';
 
 import '../state/connection.dart';
 import '../state/scan.dart';
+import '../state/storage.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/dtc_details.dart';
 import 'scan_screens.dart';
 
 class CodesScreen extends ConsumerWidget {
@@ -41,7 +43,10 @@ class CodesScreen extends ConsumerWidget {
     final conn = ref.watch(connectionProvider);
     final scan = ref.watch(scanProvider);
     if (!conn.isReady) {
-      return SectionPage(title: 'Fault Codes', children: [NotConnectedCard(onConnect: () => context.go('/connect'))]);
+      return SectionPage(title: 'Fault Codes', children: [
+        NotConnectedCard(onConnect: () => context.go('/connect')),
+        const CodeLibrary(),
+      ]);
     }
     final r = scan.result;
     return SectionPage(
@@ -70,15 +75,55 @@ class CodesScreen extends ConsumerWidget {
           DtcListCard(title: 'Pending codes (Mode 07)', status: DtcStatus.pending, codes: r.pending?.all),
           DtcListCard(title: 'Permanent codes (Mode 0A)', status: DtcStatus.permanent, codes: r.permanent?.all),
         ],
-        const InfoCard(
-          title: 'About code descriptions',
-          icon: Icons.menu_book_outlined,
-          child: Text(
-              'Code descriptions, causes, severity and repair guidance come from the fault-code database, which is added once its '
-              'licensing is settled. Until then the app shows each code exactly as the vehicle reported it and never guesses a meaning.',
-              style: TextStyle(color: AppColors.textSecondary)),
-        ),
+        const CodeLibrary(),
       ],
+    );
+  }
+}
+
+/// The searchable code library, backed by the installed description packs.
+class CodeLibrary extends ConsumerWidget {
+  const CodeLibrary({super.key});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lib = ref.watch(dtcLibraryProvider);
+    if (lib.hasError) {
+      return InfoCard(
+          title: 'Code library',
+          icon: Icons.menu_book_outlined,
+          child: Text('The fault-code library could not be loaded: ${lib.error}', style: const TextStyle(color: AppColors.critical)));
+    }
+    return DtcLibraryCard(count: lib.value, search: (q) => _SearchResults(q));
+  }
+}
+
+class _SearchResults extends ConsumerWidget {
+  const _SearchResults(this.query);
+  final String query;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final res = ref.watch(dtcSearchProvider(query));
+    return res.when(
+      loading: () => const Padding(padding: EdgeInsets.only(top: 12), child: LinearProgressIndicator()),
+      error: (e, _) => Text('Search failed: $e'),
+      data: (rows) => rows.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                  Dtc.isValid(query)
+                      ? '${query.toUpperCase()} is not in the library. It may be manufacturer-specific; no meaning is guessed.'
+                      : 'No codes match "$query".',
+                  style: const TextStyle(color: AppColors.textSecondary)))
+          : Column(children: [
+              for (final d in rows)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Text(d.code, style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w700)),
+                  title: Text(d.description),
+                  trailing: SeverityPill(d.severity),
+                  onTap: () => showDtcDetails(context, d),
+                ),
+            ]),
     );
   }
 }
