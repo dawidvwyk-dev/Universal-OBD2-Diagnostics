@@ -1,0 +1,12 @@
+name: obd_sim
+description: "Simulated ELM327 adapter and virtual ECUs for testing. Never used for production readings."
+version: 0.1.0
+publish_to: none
+resolution: workspace
+environment:
+  sdk: ^3.6.0
+dependencies:
+  obd_decoders: any
+  obd_transport: any
+dev_dependencies:
+  test: ^1.25.0

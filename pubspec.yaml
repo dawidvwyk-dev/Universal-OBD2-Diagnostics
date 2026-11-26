@@ -1,0 +1,13 @@
+name: obd_workspace
+publish_to: none
+environment:
+  sdk: ^3.6.0
+workspace:
+  - app
+  - packages/obd_decoders
+  - packages/obd_protocols
+  - packages/obd_transport
+  - packages/obd_engine
+  - packages/obd_sim
+dev_dependencies:
+  lints: ^6.0.0

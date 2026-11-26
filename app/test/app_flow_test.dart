@@ -1,0 +1,120 @@
+import 'dart:io';
+
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:obd_diag_app/main.dart';
+import 'package:obd_diag_app/state/settings.dart';
+
+/// Loads real fonts so optional screenshots are readable.
+Future<void> _loadFonts() async {
+  final dir = Platform.environment['FLUTTER_ROOT'] ?? '/opt/sdk/flutter';
+  final base = '$dir/bin/cache/artifacts/material_fonts';
+  Future<void> load(String family, List<String> files) async {
+    final l = FontLoader(family);
+    for (final f in files) {
+      final file = File('$base/$f');
+      if (file.existsSync()) l.addFont(Future.value(ByteData.sublistView(file.readAsBytesSync())));
+    }
+    await l.load();
+  }
+
+  await load('Roboto', ['Roboto-Regular.ttf', 'Roboto-Medium.ttf', 'Roboto-Bold.ttf']);
+  await load('MaterialIcons', ['MaterialIcons-Regular.otf']);
+}
+
+class _DevSettings extends SettingsNotifier {
+  @override
+  AppSettings build() => const AppSettings(developerMode: true);
+}
+
+Future<void> _settle(WidgetTester t, [int ms = 3000]) async {
+  for (var i = 0; i < ms ~/ 50; i++) {
+    await t.pump(const Duration(milliseconds: 50));
+  }
+}
+
+Future<void> _shot(WidgetTester t, String name) async {
+  if (Platform.environment['SCREENSHOTS'] != '1') return;
+  await expectLater(find.byType(MaterialApp), matchesGoldenFile('screenshots/$name.png'));
+}
+
+void main() {
+  setUpAll(_loadFonts);
+
+  Future<void> pumpApp(WidgetTester t, Size size) async {
+    t.view.physicalSize = size;
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    await t.pumpWidget(ProviderScope(
+      overrides: [settingsProvider.overrideWith(_DevSettings.new)],
+      child: const DiagnosticsApp(),
+    ));
+    await t.pump();
+  }
+
+  testWidgets('desktop: connect simulator, quick scan, codes, live data', (t) async {
+    await pumpApp(t, const Size(1400, 900));
+    expect(find.text('No vehicle connected'), findsOneWidget);
+    await _shot(t, 'desktop_dashboard_disconnected');
+
+    await t.tap(find.text('Connect Vehicle').first);
+    await t.pump();
+    // Choose the lean scenario.
+    await t.tap(find.byType(DropdownButtonFormField<String>));
+    await t.pump();
+    await t.tap(find.text('Lean bank 1 (P0171), CAN 11-bit').last);
+    await t.pump();
+    await t.tap(find.text('Start simulator'));
+    await _settle(t, 6000);
+    expect(find.textContaining('SIMULATED DATA'), findsOneWidget);
+    expect(find.text('Simulator connected'), findsOneWidget);
+    await _shot(t, 'desktop_connect');
+
+    await t.tap(find.text('Full Diagnostic Scan').first);
+    await t.pump();
+    await t.tap(find.text('Start scan'));
+    await _settle(t, 8000);
+    expect(find.text('P0171'), findsWidgets);
+    expect(find.text('Check engine light ON'), findsOneWidget);
+    await _shot(t, 'desktop_full_scan');
+
+    await t.tap(find.text('Live Data').first);
+    await t.pump();
+    await t.tap(find.text('Start'));
+    await _settle(t, 3000);
+    expect(find.text('Engine speed'), findsWidgets);
+    await _shot(t, 'desktop_live');
+    await t.tap(find.text('Pause'));
+    await t.pump();
+
+    await t.tap(find.text('Adapter Manager').first);
+    await _settle(t, 200);
+    expect(find.text('ELM327 v2.3'), findsWidgets);
+    await _shot(t, 'desktop_adapter');
+
+    await t.tap(find.text('Fault Codes').first);
+    await t.pump();
+    await t.tap(find.text('Clear codes...'));
+    await t.pump();
+    expect(find.text('Clear diagnostic trouble codes?'), findsOneWidget);
+    // Button disabled until the user ticks the acknowledgement.
+    final btn = t.widget<FilledButton>(find.widgetWithText(FilledButton, 'Clear codes'));
+    expect(btn.onPressed, isNull);
+    await _shot(t, 'desktop_clear_confirm');
+    await t.tap(find.text('Cancel'));
+    await _settle(t, 200);
+  });
+
+  testWidgets('phone layout uses a drawer', (t) async {
+    await pumpApp(t, const Size(400, 860));
+    expect(find.byType(NavigationRail), findsNothing);
+    expect(find.byTooltip('Open navigation menu'), findsOneWidget);
+    await _shot(t, 'phone_dashboard');
+    await t.tap(find.byTooltip('Open navigation menu'));
+    await _settle(t, 500);
+    expect(find.text('Adapter Manager'), findsOneWidget);
+    await _shot(t, 'phone_drawer');
+  });
+}

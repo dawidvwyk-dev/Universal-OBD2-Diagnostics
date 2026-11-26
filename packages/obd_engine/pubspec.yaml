@@ -1,0 +1,14 @@
+name: obd_engine
+description: "OBD2 communication engine: adapter link, probing, sessions, safety gate."
+version: 0.1.0
+publish_to: none
+resolution: workspace
+environment:
+  sdk: ^3.6.0
+dependencies:
+  obd_decoders: any
+  obd_protocols: any
+  obd_transport: any
+dev_dependencies:
+  obd_sim: any
+  test: ^1.25.0
