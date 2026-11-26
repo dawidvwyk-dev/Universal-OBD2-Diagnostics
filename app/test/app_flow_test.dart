@@ -1,11 +1,13 @@
 import 'dart:io';
 
+import 'package:diag_store/diag_store.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:obd_diag_app/main.dart';
 import 'package:obd_diag_app/state/settings.dart';
+import 'package:obd_diag_app/state/storage.dart';
 
 /// Loads real fonts so optional screenshots are readable.
 Future<void> _loadFonts() async {
@@ -15,12 +17,18 @@ Future<void> _loadFonts() async {
     final l = FontLoader(family);
     for (final f in files) {
       final file = File('$base/$f');
-      if (file.existsSync()) l.addFont(Future.value(ByteData.sublistView(file.readAsBytesSync())));
+      if (file.existsSync()) {
+        l.addFont(Future.value(ByteData.sublistView(file.readAsBytesSync())));
+      }
     }
     await l.load();
   }
 
-  await load('Roboto', ['Roboto-Regular.ttf', 'Roboto-Medium.ttf', 'Roboto-Bold.ttf']);
+  await load('Roboto', [
+    'Roboto-Regular.ttf',
+    'Roboto-Medium.ttf',
+    'Roboto-Bold.ttf',
+  ]);
   await load('MaterialIcons', ['MaterialIcons-Regular.otf']);
 }
 
@@ -37,7 +45,10 @@ Future<void> _settle(WidgetTester t, [int ms = 3000]) async {
 
 Future<void> _shot(WidgetTester t, String name) async {
   if (Platform.environment['SCREENSHOTS'] != '1') return;
-  await expectLater(find.byType(MaterialApp), matchesGoldenFile('screenshots/$name.png'));
+  await expectLater(
+    find.byType(MaterialApp),
+    matchesGoldenFile('screenshots/$name.png'),
+  );
 }
 
 void main() {
@@ -47,14 +58,25 @@ void main() {
     t.view.physicalSize = size;
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.reset);
-    await t.pumpWidget(ProviderScope(
-      overrides: [settingsProvider.overrideWith(_DevSettings.new)],
-      child: const DiagnosticsApp(),
-    ));
+    await t.pumpWidget(
+      ProviderScope(
+        overrides: [
+          settingsProvider.overrideWith(_DevSettings.new),
+          databaseProvider.overrideWith((ref) async {
+            final db = DiagDatabase.memory();
+            ref.onDispose(db.close);
+            return db;
+          }),
+        ],
+        child: const DiagnosticsApp(),
+      ),
+    );
     await t.pump();
   }
 
-  testWidgets('desktop: connect simulator, quick scan, codes, live data', (t) async {
+  testWidgets('desktop: connect simulator, quick scan, codes, live data', (
+    t,
+  ) async {
     await pumpApp(t, const Size(1400, 900));
     expect(find.text('No vehicle connected'), findsOneWidget);
     await _shot(t, 'desktop_dashboard_disconnected');
@@ -79,6 +101,31 @@ void main() {
     expect(find.text('P0171'), findsWidgets);
     expect(find.text('Check engine light ON'), findsOneWidget);
     await _shot(t, 'desktop_full_scan');
+    await t.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 200)),
+    );
+    await _settle(t, 200);
+    await t.scrollUntilVisible(
+      find.text('Saved to history as a simulated scan.'),
+      400,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView).first,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    expect(find.text('Saved to history as a simulated scan.'), findsOneWidget);
+
+    await t.tap(find.text('Vehicle History').first);
+    await _settle(t, 200);
+    await t.tap(find.text('Simulated scans'));
+    await t.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 200)),
+    );
+    await _settle(t, 200);
+    expect(find.textContaining('Full scan · SIMULATED'), findsOneWidget);
+    await _shot(t, 'desktop_history');
 
     await t.tap(find.text('Live Data').first);
     await t.pump();
@@ -100,11 +147,16 @@ void main() {
     await t.pump();
     expect(find.text('Clear diagnostic trouble codes?'), findsOneWidget);
     // Button disabled until the user ticks the acknowledgement.
-    final btn = t.widget<FilledButton>(find.widgetWithText(FilledButton, 'Clear codes'));
+    final btn = t.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Clear codes'),
+    );
     expect(btn.onPressed, isNull);
     await _shot(t, 'desktop_clear_confirm');
     await t.tap(find.text('Cancel'));
     await _settle(t, 200);
+    // Dispose the app so database stream timers are cancelled.
+    await t.pumpWidget(const SizedBox());
+    await t.pump(const Duration(seconds: 1));
   });
 
   testWidgets('phone layout uses a drawer', (t) async {

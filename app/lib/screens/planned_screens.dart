@@ -40,16 +40,3 @@ class ReportsScreen extends StatelessWidget {
         ]),
       ]);
 }
-
-class HistoryScreen extends StatelessWidget {
-  const HistoryScreen({super.key});
-  @override
-  Widget build(BuildContext context) => const SectionPage(title: 'Vehicle History', children: [
-        PlannedFeatureCard(phase: 'Phases 1 and 6', items: [
-          'Saved vehicle profiles: name, registration, VIN, make, model, engine, year',
-          'Every scan stored in the encrypted local database',
-          'Previous fault codes, reports and maintenance notes',
-          'Side-by-side comparison of scans',
-        ]),
-      ]);
-}

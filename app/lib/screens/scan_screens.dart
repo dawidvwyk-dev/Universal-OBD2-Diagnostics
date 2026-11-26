@@ -1,9 +1,11 @@
+import 'package:diag_store/diag_store.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:obd_decoders/obd_decoders.dart';
 
 import '../state/connection.dart';
+import '../state/storage.dart';
 import '../state/scan.dart';
 import '../state/settings.dart';
 import '../theme/app_theme.dart';
@@ -52,6 +54,10 @@ class ScanScreen extends ConsumerWidget {
             child: LinearProgressIndicator(value: scan.progress),
           ),
         if (result != null && result.full == full) ScanResultView(result),
+        if (result != null && scan.savedId != null)
+          Text(result.simulated ? 'Saved to history as a simulated scan.' : 'Saved to vehicle history.',
+              style: const TextStyle(color: AppColors.textSecondary)),
+        if (scan.saveError != null) Text(scan.saveError!, style: const TextStyle(color: AppColors.warning)),
         if (result != null && result.full != full)
           Text('The last scan was a ${result.full ? 'full' : 'quick'} scan. Its results are shown on the Fault Codes page.',
               style: const TextStyle(color: AppColors.textSecondary)),
@@ -157,13 +163,20 @@ class DtcListCard extends StatelessWidget {
   }
 }
 
-class DtcTile extends StatelessWidget {
+final _definitionProvider = FutureProvider.family<DtcDefinition?, (String, String?)>((ref, arg) async {
+  final repo = await ref.watch(repositoryProvider.future);
+  return repo.lookupDtc(arg.$1, manufacturer: arg.$2);
+});
+
+class DtcTile extends ConsumerWidget {
   const DtcTile(this.dtc, this.status, {super.key});
   final Dtc dtc;
   final DtcStatus status;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final make = ref.watch(connectionProvider).identity?.manufacturer;
+    final def = ref.watch(_definitionProvider((dtc.code, make))).value;
     final system = switch (dtc.system) {
       DtcSystem.powertrain => 'Powertrain',
       DtcSystem.chassis => 'Chassis',
@@ -182,9 +195,16 @@ class DtcTile extends StatelessWidget {
         ),
         child: Text(dtc.code, style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w700)),
       ),
-      title: const Text('Description not available: fault-code database not installed yet',
-          style: TextStyle(color: AppColors.textSecondary, fontStyle: FontStyle.italic)),
-      subtitle: Text('$system · $origin · ${status.name}'),
+      title: def == null
+          ? const Text('Unknown code: no installed fault-code database defines it',
+              style: TextStyle(color: AppColors.textSecondary, fontStyle: FontStyle.italic))
+          : Text(def.description),
+      subtitle: Text([
+        system,
+        origin,
+        status.name,
+        if (def != null) def.confidence == 'verified' ? 'verified ${def.manufacturer ?? ''} definition'.replaceAll('  ', ' ') : 'generic interpretation',
+      ].join(' · ')),
     );
   }
 }

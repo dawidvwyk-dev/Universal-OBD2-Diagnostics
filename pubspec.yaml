@@ -9,5 +9,12 @@ workspace:
   - packages/obd_transport
   - packages/obd_engine
   - packages/obd_sim
+  - packages/diag_store
 dev_dependencies:
   lints: ^6.0.0
+
+# SQLite3MultipleCiphers gives an encrypted database on Windows and Android.
+hooks:
+  user_defines:
+    sqlite3:
+      source: sqlite3mc

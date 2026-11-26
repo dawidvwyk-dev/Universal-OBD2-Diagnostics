@@ -1,8 +1,10 @@
+import 'package:diag_store/diag_store.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:obd_decoders/obd_decoders.dart';
 import 'package:obd_engine/obd_engine.dart';
 
 import 'connection.dart';
+import 'storage.dart';
 
 class ScanResult {
   ScanResult({
@@ -44,7 +46,9 @@ class ScanResult {
 }
 
 class ScanState {
-  const ScanState({this.running = false, this.step, this.result, this.progress = 0});
+  const ScanState({this.running = false, this.step, this.result, this.progress = 0, this.savedId, this.saveError});
+  final int? savedId;
+  final String? saveError;
   final bool running;
   final String? step;
   final double progress;
@@ -99,24 +103,63 @@ class ScanController extends Notifier<ScanState> {
       final live = s.supportedPids.values.expand((e) => e).where((p) => p % 0x20 != 0 && mode01Pids[p]?.isLiveValue == true).toSet().toList()..sort();
       snapshot = await step('Reading all supported sensors', () => s.readPids(live)) ?? {};
     }
-    state = ScanState(
-      result: ScanResult(
-        time: DateTime.now(),
-        full: full,
-        simulated: conn.simulated,
-        identity: identity,
-        voltage: voltage,
-        readiness: readiness,
-        stored: stored,
-        pending: pending,
-        permanent: permanent,
-        freezeDtc: ffDtc,
-        freezeFrame: ff,
-        snapshot: snapshot,
-        errors: errors,
-      ),
-      progress: 1,
+    final result = ScanResult(
+      time: DateTime.now(),
+      full: full,
+      simulated: conn.simulated,
+      identity: identity,
+      voltage: voltage,
+      readiness: readiness,
+      stored: stored,
+      pending: pending,
+      permanent: permanent,
+      freezeDtc: ffDtc,
+      freezeFrame: ff,
+      snapshot: snapshot,
+      errors: errors,
     );
+    state = ScanState(result: result, progress: 1);
+    await _save(result, conn);
+  }
+
+  /// Every scan is stored in the encrypted history. Simulated scans are
+  /// stored flagged and are not linked to a vehicle profile.
+  Future<void> _save(ScanResult r, ConnectionInfo conn) async {
+    try {
+      final repo = await ref.read(repositoryProvider.future);
+      final vin = r.identity?.vin;
+      int? vehicleId;
+      if (vin != null && !r.simulated) {
+        final years = r.identity!.modelYearCandidates;
+        vehicleId = await repo.vehicleForVin(vin,
+            manufacturer: r.identity!.manufacturer, modelYear: years.length == 1 ? years.first : null);
+      }
+      final id = await repo.saveScan(ScanRecord(
+        vehicleId: vehicleId,
+        time: r.time,
+        full: r.full,
+        simulated: r.simulated,
+        vin: vin,
+        protocol: conn.session?.protocol.label,
+        adapter: conn.adapter == null ? null : '${conn.adapter!.manufacturer}, ${conn.adapter!.model}',
+        batteryVolts: r.voltage,
+        milOn: r.readiness?.milOn,
+        dtcs: [
+          for (final (rep, st) in [(r.stored, DtcStatus.stored), (r.pending, DtcStatus.pending), (r.permanent, DtcStatus.permanent)])
+            if (rep != null)
+              for (final e in rep.byEcu.entries)
+                for (final d in e.value) (d, st, e.key),
+          if (r.freezeDtc != null) (r.freezeDtc!, DtcStatus.freezeFrame, null),
+        ],
+        snapshot: r.snapshot,
+        freezeFrame: r.freezeFrame,
+        monitors: r.readiness?.monitors ?? const [],
+        errors: r.errors,
+      ));
+      state = ScanState(result: r, progress: 1, savedId: id);
+    } catch (e) {
+      state = ScanState(result: r, progress: 1, saveError: 'The scan could not be saved to history: $e');
+    }
   }
 
   void clear() => state = const ScanState();

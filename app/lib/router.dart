@@ -5,6 +5,7 @@ import 'screens/adapter_screen.dart';
 import 'screens/codes_screen.dart';
 import 'screens/connect_screen.dart';
 import 'screens/dashboard_screen.dart';
+import 'screens/history_screen.dart';
 import 'screens/live_data_screen.dart';
 import 'screens/planned_screens.dart';
 import 'screens/scan_screens.dart';
