@@ -1,0 +1,35 @@
+name: obd_diag_app
+description: "Rogue OBD2 Diagnostic Tool for Windows and Android."
+publish_to: 'none'
+resolution: workspace
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.14.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  material_ui: ^1.1.0
+  obd_decoders: any
+  obd_protocols: any
+  obd_transport: any
+  obd_engine: any
+  obd_sim: any
+  diag_store: any
+  flutter_riverpod: ^3.5.0
+  go_router: ^18.1.4
+  shared_preferences: ^2.5.6
+  flutter_secure_storage: ^11.2.0
+  path_provider: ^2.1.6
+  drift: ^2.35.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/dtc/rogue_generic.json
