@@ -65,7 +65,11 @@ class DashboardScreen extends ConsumerWidget {
                   onTap: () => context.go(path),
                   child: Padding(
                     padding: const EdgeInsets.all(18),
-                    child: Row(children: [Icon(icon, color: AppColors.accent), const SizedBox(width: 12), Text(label)]),
+                    child: Row(children: [
+                      Icon(icon, color: AppColors.accent),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(label, overflow: TextOverflow.ellipsis)),
+                    ]),
                   ),
                 ),
               ),

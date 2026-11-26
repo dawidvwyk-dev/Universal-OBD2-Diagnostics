@@ -23,6 +23,10 @@ dependencies:
   flutter_secure_storage: ^11.2.0
   path_provider: ^2.1.6
   drift: ^2.35.4
+  universal_ble: ^3.4.1
+  flutter_libserialport: ^0.6.0
+  usb_serial: ^0.6.0
+  permission_handler: ^13.0.2
 
 dev_dependencies:
   flutter_test:
